@@ -1,0 +1,31 @@
+#
+# Authenticates Backblaze
+#
+- name: Load backblaze record from Keeper Vault
+  keepersecurity.keeper_secrets_manager.keeper_get_record:
+    uid: "{{ bucket_key  }}"
+    allow:
+    - password
+    cache: "{{ hostvars['localhost']['keeper_record_cache'] }}"
+  register: backblaze_auth
+  delegate_to: localhost
+  no_log: true
+
+- name: Authenticate Backblaze
+  ansible.builtin.uri:
+    url: https://api.backblazeb2.com/b2api/v2/b2_authorize_account
+    method: Get
+    headers:
+      Authorization: "Basic {{ backblaze_auth.record.password[0] }}"
+  register: backblaze_tokenreturn
+  delegate_to: localhost
+  no_log: true
+
+- name: Stores the token for use by hosts
+  ansible.builtin.set_fact:
+    backblaze_token: "{{ backblaze_tokenreturn.json.authorizationToken }}"
+  no_log: true
+
+- name: Stores the bucketID for use by hosts
+  ansible.builtin.set_fact:
+    backblaze_bucketId: "{{ backblaze_tokenreturn.json.allowed.bucketId }}"

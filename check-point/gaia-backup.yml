@@ -1,0 +1,95 @@
+#
+# Performs GAIA level backups of the device
+#
+- name: Show current hostname
+  check_point.gaia.cp_gaia_hostname_facts:
+  register: fwhostnametask
+
+- ansible.builtin.debug:
+    msg: "{{ fwhostnametask | community.general.json_query('ansible_facts.name') }}"
+  register: fwhostname
+
+- name: Copy Script
+  vars:
+    scriptcontents: "{{ lookup('file', '~/scripts/main.sh') }}"
+  ansible.builtin.debug:
+    msg: "{{ scriptcontents }}"
+
+- name: Put backscript onto device
+  vars:
+    scriptcontents: "{{ lookup('file', '~/scripts/main.sh') }}"
+  check_point.gaia.cp_gaia_put_file:
+    file_name: /tmp/backupscript.sh
+    text_content: "{{ scriptcontents }}"
+    override: true
+
+- name: Make script executeable
+  check_point.gaia.cp_gaia_run_script:
+    script: "chmod +x /tmp/backupscript.sh"
+
+- name: Run backup script
+  check_point.gaia.cp_gaia_run_script:
+    script: "/tmp/backupscript.sh"
+
+- name: Gather Config
+  check_point.gaia.cp_gaia_run_script:
+    script: 'clish -c "show configuration" >> /tmp/backups/{{ ansible_date_time.date }}_{{ fwhostname.msg }}_configuration.txt'
+
+- name: Generate Upload url
+  ansible.builtin.uri:
+    url: https://api003.backblazeb2.com/b2api/v3/b2_get_upload_url?bucketId={{backblaze_bucketId}}
+    headers:
+      Authorization: "{{ backblaze_token }}"
+  register: backblaze_uploadurl
+  delegate_to: localhost
+
+- name: Generate SHA1 - config
+  check_point.gaia.cp_gaia_run_script:
+    script: "sha1sum /tmp/backups/{{ ansible_date_time.date }}_{{ fwhostname.msg }}_configuration.txt"
+  register: checkpoint_sha1
+
+- name: Get SHA1 Value - config
+  vars:
+    query: 'run_script.tasks[0]."task-details"[0].output'
+  ansible.builtin.debug:
+    msg: "{{ checkpoint_sha1 | community.general.json_query(query) | b64decode | regex_search('[^\\s]+') }}"
+  register: checkpoint_sha1value
+
+- name: Upload Configuration to BackBlaze - config
+  vars:
+    headers: '-H "Authorization: {{ backblaze_uploadurl.json.authorizationToken }}" -H "Content-Type: b2/x-auto" -H "X-Bz-Info-Author: unknown" -H "X-Bz-Content-Sha1:{{ checkpoint_sha1value.msg }}" -H "X-Bz-File-Name:{{ backuptype }}/{{ ansible_date_time.date}}/{{ fwhostname.msg }}_configuration.txt"'
+    databinary: '/tmp/backups/{{ ansible_date_time.date }}_{{ fwhostname.msg }}_configuration.txt'
+  check_point.gaia.cp_gaia_run_script:
+    script: 'curl_cli -k {{ headers }} -T {{ databinary }} -X POST {{ backblaze_uploadurl.json.uploadUrl }}'
+  async: 1800
+  poll: 5
+
+- name: Generate SHA1 - additional files
+  check_point.gaia.cp_gaia_run_script:
+    script: "sha1sum /tmp/backups/{{ ansible_date_time.date }}_{{ fwhostname.msg }}_additional_files.tgz"
+  register: checkpoint_sha1
+
+- name: Get SHA1 Value - additional files
+  vars:
+    query: 'run_script.tasks[0]."task-details"[0].output'
+  ansible.builtin.debug:
+    msg: "{{ checkpoint_sha1 | community.general.json_query(query) | b64decode | regex_search('[^\\s]+') }}"
+  register: checkpoint_sha1value
+
+- name: Upload Content to BackBlaze - additional files
+  vars:
+    timenow: '%Y-%m-%d'
+    headers: '-H "Authorization: {{ backblaze_uploadurl.json.authorizationToken }}" -H "Content-Type: b2/x-auto" -H "X-Bz-Info-Author: unknown" -H "X-Bz-Content-Sha1:{{ checkpoint_sha1value.msg }}" -H "X-Bz-File-Name:{{ backuptype }}/{{ ansible_date_time.date}}/{{ fwhostname.msg }}_additional_files.tgz"'
+    databinary: '/tmp/backups/{{ ansible_date_time.date }}_{{ fwhostname.msg }}_additional_files.tgz'
+  check_point.gaia.cp_gaia_run_script:
+    script: 'curl_cli -k {{ headers }} -T {{ databinary }} -X POST {{ backblaze_uploadurl.json.uploadUrl }}'
+  async: 1800
+  poll: 5
+
+- name: Delete local files
+  check_point.gaia.cp_gaia_run_script:
+    script: "rm -r /tmp/backups"
+
+- name: Delete script
+  check_point.gaia.cp_gaia_run_script:
+    script: "rm /tmp/backupscript.sh"

@@ -1,0 +1,5 @@
+---
+collections:
+  - name: check_point.mgmt
+  - name: check_point.gaia
+  - name: keepersecurity.keeper_secrets_manager

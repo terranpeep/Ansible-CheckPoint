@@ -1,0 +1,84 @@
+#
+# Performs Check Point GAIA backups as well as gathers key information
+# Grabs a migrate export server from managers
+#
+
+# Perform a cache of all records we need from Keeper to stop multiple API calls
+- name: 1 - Cache Keeper Credentials
+  hosts: localhost
+  connection: httpapi
+  gather_facts: false
+  tasks:
+    - name: Cache all credentials 
+      include_tasks: ../KSM/keeper-cache-credentials.yml
+
+# For each device, set the Ansible_user and Ansible_Password from the cache
+- name: 2 - Retrieve credentials
+  hosts: all
+  connection: httpapi
+  gather_facts: false
+  vars:
+    key_file: "{{ lookup('file','../inventories/keyUIDs.json') | from_json }}"
+  tasks:
+    - name: Retrieve device credentials
+      include_tasks: ../KSM/keeper-credentials.yml
+
+# Generate an upload token to send files to Backblaze
+- name: 3 - Generate Backblaze Token
+  hosts: all
+  gather_facts: false
+  vars:
+    # This should be the record ID in KSM where you have stored your backblaze auth ID
+    bucket_key: abc123456
+  tasks:
+    - name: Perform Backblaze Startup Tasks
+      include_tasks: ../Backblaze/backblaze-init.yml
+
+# Perform Gaia specific backups
+- name: 4 - Backup Check Point Firewalls
+  hosts: all
+  vars:
+    ansible_httpapi_use_ssl: True
+    ansible_httpapi_validate_certs: False
+    ansible_network_os: check_point.gaia.checkpoint
+  connection: httpapi
+  tasks:
+    - name: Perform GAIA Config
+      block:
+        - name: Backup Gaia Configuration
+          include_tasks: gaia-backups.yml
+          when: "'cp' in type"
+      rescue:
+        - name: write info to file
+          ansible.builtin.lineinfile:
+           create: true
+           state: present
+           path: "/tmp/cp-gaia-errors.log"
+           line: "{{ ansible_date_time.date}} - {{ ansible_hostname }} - {{ansible_failed_result}}"
+          delegate_to: localhost
+
+
+# Perform Check Point manager export and backups
+- name: 5 - Backup Check Point Managers
+  hosts: all
+  vars:
+    ansible_httpapi_use_ssl: True
+    ansible_httpapi_validate_certs: False
+    ansible_network_os: check_point.gaia.checkpoint
+    backuptype: "{{ 'MONTHLY' if ansible_date_time.weekday == 'SUNDAY' else 'DAILY' }}"
+  connection: httpapi
+  tasks:
+    - name: Perform Manager Backup
+      block:
+        - name: Run Manager Tasks
+          include_tasks: cp-manager.yml
+          when: "type == 'cpmanager'"
+      rescue:
+        - name: write info to file
+          ansible.builtin.lineinfile:
+           create: true
+           state: present
+           path: "/tmp/cp-manager-errors.log"
+           line: "{{ ansible_date_time.date}} - {{ ansible_hostname }} - {{ansible_failed_result}}"
+          delegate_to: localhost
+        

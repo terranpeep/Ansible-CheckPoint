@@ -1,0 +1,53 @@
+- name: Show current hostname
+  check_point.gaia.cp_gaia_hostname_facts:
+  register: fwhostnametask
+
+- ansible.builtin.debug:
+    msg: "{{ fwhostnametask | community.general.json_query('ansible_facts.name') }}"
+  register: fwhostname
+
+- name: Show version
+  check_point.gaia.cp_gaia_version_facts:
+
+- name: Extract Version Number
+  set_fact:
+    version_number: "{{ product_version | replace('Check Point Gaia ', '' ) }}"
+
+- name: Export Manager
+  check_point.gaia.cp_gaia_run_script:
+    script: "/opt/CPsuite-R81.20/fw1/scripts/migrate_server export -v {{ version_number }} -n -skip_upgrade_tools_check /tmp/{{ ansible_date_time.date}}_{{ fwhostname.msg }}_export.tgz"
+  async: 1800
+  poll: 10
+
+- name: Generate Upload url
+  ansible.builtin.uri:
+    url: https://api003.backblazeb2.com/b2api/v3/b2_get_upload_url?bucketId={{backblaze_bucketId}}
+    headers:
+      Authorization: "{{ backblaze_token }}"
+  register: backblaze_uploadurl
+  delegate_to: localhost
+
+- name: Generate SHA1
+  check_point.gaia.cp_gaia_run_script:
+    script: "sha1sum /tmp/{{ ansible_date_time.date}}_{{ fwhostname.msg }}_export.tgz"
+  register: checkpoint_sha1
+
+- name: Get SHA1 Value
+  vars:
+    query: 'run_script.tasks[0]."task-details"[0].output'
+  ansible.builtin.debug:
+    msg: "{{ checkpoint_sha1 | community.general.json_query(query) | b64decode | regex_search('[^\\s]+') }}"
+  register: checkpoint_sha1value
+
+- name: Upload Content to BackBlaze
+  vars:
+    headers: '-H "Authorization: {{ backblaze_uploadurl.json.authorizationToken }}" -H "Content-Type: b2/x-auto" -H "X-Bz-Info-Author: unknown" -H "X-Bz-Content-Sha1:{{ checkpoint_sha1value.msg }}" -H "X-Bz-File-Name:{{ backuptype }}/{{ ansible_date_time.date}}/{{ fwhostname.msg }}_export.tgz"'
+    databinary: '/tmp/{{ ansible_date_time.date}}_{{ fwhostname.msg }}_export.tgz'
+  check_point.gaia.cp_gaia_run_script:
+    script: 'curl_cli -k {{ headers }} -T {{ databinary }} -X POST {{ backblaze_uploadurl.json.uploadUrl }}'
+  async: 1800
+  poll: 10
+
+- name: Delete local file
+  check_point.gaia.cp_gaia_run_script:
+    script: "rm /tmp/{{ ansible_date_time.date}}_{{ fwhostname.msg }}_export.tgz"

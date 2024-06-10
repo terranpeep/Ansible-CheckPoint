@@ -1,0 +1,16 @@
+sep2:
+  hosts:
+    fw1.jimloggins:
+      ansible_host: 172.16.1.252
+      type: cpfirewall
+    fw2.jimloggins:
+      ansible_host: 172.16.1.253
+      type: cpfirewall
+    mgmr.jimloggins:
+      ansible_host: 172.16.1.100
+      type: cpmanager
+  vars:
+    customer: jimloggins
+
+
+# supported types: cpfirewall, cpmanager
