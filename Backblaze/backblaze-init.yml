@@ -26,6 +26,7 @@
     backblaze_token: "{{ backblaze_tokenreturn.json.authorizationToken }}"
   no_log: true
 
+# If you have multiple buckets, then you would need to set this manually. Otherwise this looks up the bucket ID that the key is allowed to view
 - name: Stores the bucketID for use by hosts
   ansible.builtin.set_fact:
     backblaze_bucketId: "{{ backblaze_tokenreturn.json.allowed.bucketId }}"

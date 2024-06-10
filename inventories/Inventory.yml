@@ -3,12 +3,15 @@ sep2:
     fw1.jimloggins:
       ansible_host: 172.16.1.252
       type: cpfirewall
+      ksm_uid: abcd12345
     fw2.jimloggins:
       ansible_host: 172.16.1.253
       type: cpfirewall
+      ksm_uid: abcd12345
     mgmr.jimloggins:
       ansible_host: 172.16.1.100
       type: cpmanager
+      ksm_uid: abcd12345
   vars:
     customer: jimloggins
 

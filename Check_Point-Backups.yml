@@ -28,7 +28,7 @@
   hosts: all
   gather_facts: false
   vars:
-    # This should be the record ID in KSM where you have stored your backblaze auth ID
+    # This should be the record ID in KSM where you have stored your backblaze auth credentials
     bucket_key: abc123456
   tasks:
     - name: Perform Backblaze Startup Tasks
