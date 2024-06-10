@@ -41,7 +41,7 @@
 
 - name: Upload Content to BackBlaze
   vars:
-    headers: '-H "Authorization: {{ backblaze_uploadurl.json.authorizationToken }}" -H "Content-Type: b2/x-auto" -H "X-Bz-Info-Author: unknown" -H "X-Bz-Content-Sha1:{{ checkpoint_sha1value.msg }}" -H "X-Bz-File-Name:{{ backuptype }}/{{ ansible_date_time.date}}/{{ fwhostname.msg }}_export.tgz"'
+    headers: '-H "Authorization: {{ backblaze_uploadurl.json.authorizationToken }}" -H "Content-Type: b2/x-auto" -H "X-Bz-Info-Author: unknown" -H "X-Bz-Content-Sha1:{{ checkpoint_sha1value.msg }}" -H "X-Bz-File-Name:{{ ansible_date_time.date}}/{{ fwhostname.msg }}_export.tgz"'
     databinary: '/tmp/{{ ansible_date_time.date}}_{{ fwhostname.msg }}_export.tgz'
   check_point.gaia.cp_gaia_run_script:
     script: 'curl_cli -k {{ headers }} -T {{ databinary }} -X POST {{ backblaze_uploadurl.json.uploadUrl }}'

@@ -65,7 +65,6 @@
     ansible_httpapi_use_ssl: True
     ansible_httpapi_validate_certs: False
     ansible_network_os: check_point.gaia.checkpoint
-    backuptype: "{{ 'MONTHLY' if ansible_date_time.weekday == 'SUNDAY' else 'DAILY' }}"
   connection: httpapi
   tasks:
     - name: Perform Manager Backup
